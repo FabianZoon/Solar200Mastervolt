@@ -1,0 +1,73 @@
+﻿
+-- update de totalkwh en runninghours in de dagmeting tabel.
+-- kan altijd gedraait worden.....(niet desctructief)
+update t_dagmeting
+set totalkwh =  m.totalkwh,
+runninghours = m.runninghours
+from t_dagmeting d
+join 
+(select userid, panneelid, max(totalkwh) as totalkwh, max(runninghours) as runninghours, dbo.toDate(senddate) as senddate  from t_metingen
+group by userid, panneelid, dbo.toDate(senddate)) m on d.userid = m.userid and d.pannel = m.panneelid and dbo.toDate(m.senddate) = d.[day]
+
+
+
+-- update de dagmeting met de sunfall.
+-- Hierbij is de sunfall de laatste meting van de dag. Er moet dus nog een meting ERNA zijn op die dag, waarbij de zonnepanelen niet actief waren.
+-- kan altijd gedraait worden.....(niet desctructief) 
+update t_dagmeting
+set sunfall =  m.sunfall
+from t_dagmeting d
+join (select userid, panneelid,  max(senddate) as sunfall, dbo.toDate(senddate) as senddate  
+      from t_metingen
+      where online = 1 
+      group by userid, panneelid, dbo.toDate(senddate)) m 
+  on d.userid = m.userid and d.pannel = m.panneelid and dbo.toDate(m.senddate) = d.[day]
+where m.sunfall < (select  max(senddate) 
+                   from t_metingen
+                   where online = 0 and m.userid = userid and  m.panneelid = panneelid and dbo.toDate(senddate) = m.senddate
+                   group by userid, panneelid, dbo.toDate(senddate) )
+
+-- update de dagmeting met de sunrise.
+-- Hierbij is de sunrise de eerste meting van de dag. Er moet dus nog een meting ERVOOR zijn op die dag, waarbij de zonnepanelen niet actief waren.
+-- kan altijd gedraait worden.....(niet desctructief) 
+
+update t_dagmeting
+set sunrise =  m.sunrise
+from t_dagmeting d
+join (select userid, panneelid,  min(senddate) as sunrise, dbo.toDate(senddate) as senddate  
+      from t_metingen
+      where online = 1 
+      group by userid, panneelid, dbo.toDate(senddate)) m 
+  on d.userid = m.userid and d.pannel = m.panneelid and dbo.toDate(m.senddate) = d.[day]
+where m.sunrise > (select  min(senddate) 
+                   from t_metingen
+                   where online = 0 and m.userid = userid and  m.panneelid = panneelid and dbo.toDate(senddate) = m.senddate
+                   group by userid, panneelid, dbo.toDate(senddate) )
+
+
+-- insert de gemiddelde metingen van een uur. (als die er zijn)
+-- kan altijd gedraait worden.....(niet desctructief) 
+-- echter doordat het insert, moet een hele uur aanwezig zijn.
+-- om daar zeker van te zijn, gaan we voor minimaal 2 uur achterstand. (datediff(hh, m.ontvangen, getdate())>1)
+insert into t_uurmeting
+select m.userid, m.panneelid, dbo.toDateHour(m.senddate), 
+		count(*) as aantal, 
+		max(m.TotalKwh) - min(m.TotalKwh) as kwh,
+		max(m.runninghours) - min(m.runninghours) as duration,
+		avg(m.mainVoltage) as mainVoltage,
+		avg(m.solarVoltage) as solarVoltage,
+		avg(m.solarCurrent) as solarCurrent,
+		avg(m.ACPower) as ACPower,
+		avg(m.Temperature) as Temperature,
+		avg(m.PowerOutput) as PowerOutput
+
+from t_metingen m
+left join t_uurmeting u on dbo.toDateHour(m.senddate) = u.date
+where online = 1 and datediff(hh, m.ontvangen, getdate())>1 and u.userid is null
+group by m.userid, m.panneelid, dbo.toDateHour(m.senddate)
+
+
+-- goed alle statistiekjes verwerkt?
+-- nu nog even wat oude gegevens wissen. (voor de zekerheid 3 dagen speling ;-)
+delete from t_metingen
+where datediff(dd, ontvangen, getdate())> 3
