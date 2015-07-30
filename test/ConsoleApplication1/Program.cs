@@ -19,7 +19,7 @@ namespace ConsoleApplication1
             string filename = string.Format(ConfigurationManager.AppSettings["currentfile"], DateTime.Now);
             if (!System.IO.File.Exists(filename))
             {
-                System.IO.File.AppendAllText(filename, "date;ACPower;Activity;mainsVolt;PowerOutput;Running;solarCurrent;solarVolt;Temp;TotalKwh;MaxACPower;FirmwareId;FirmwareRev,FirmwareDate;LinkStatus");
+                System.IO.File.AppendAllText(filename, "date;ACPower;Activity;mainsVolt;PowerOutput;Running;solarCurrent;solarVolt;Temp;TotalKwh;MaxACPower;FirmwareId;FirmwareRev,FirmwareDate;LinkStatus\r\n");
             }
 
 
